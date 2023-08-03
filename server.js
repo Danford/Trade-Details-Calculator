@@ -1,48 +1,25 @@
 const express = require('express');
 const bodyParser = require('body-parser');
-
-const app = express();
-
-app.use(bodyParser.json());
-
-const PORT = process.env.PORT || 5000;
-
 const path = require('path');
 
-// Serve static files from the React app
-app.use(express.static(path.join(__dirname, 'client/build')));
-
-// The "catchall" handler: for any request that doesn't
-// match one above, send back React's index.html file.
-app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'client/build', 'index.html'));
-});
-
-app.use((err, req, res, next) => {
-    console.error(err.stack);
-    res.status(500).send('Something broke!');
-});
-
-app.listen(PORT, () => {
-	if (process.env.NODE_ENV !== 'test') {
-    		console.log(`Server is running on port ${PORT}`);
-	}
-});
-
 function calculateStopLossPercent(entryPrice, stopLossPrice) {
-    return entryPrice * (1 - (stopLossPrice / entryPrice));
+    return (1 - stopLossPrice / entryPrice) * 100;
+}
+
+function calculateStopLossPercentByRisk(units, riskPercent, accountValue) {
+    return accountValue * (riskPercent / 100) / units;
 }
 
 function calculateStopLossPrice(entryPrice, stopLossPercent) {
     return entryPrice - (entryPrice * (stopLossPercent / 100));
 }
 
-function calculateUnitsForStopLoss(entryPrice, stopLossPrice, stopLossPercent, accountValue) {
-    const loss = (stopLossPercent / 100) * accountValue;
-    return loss / (entryPrice - stopLossPrice);
+function calculateUnits(entryPrice, stopLossPrice, accountValue, riskPercent) {
+    const risk = (riskPercent / 100) * accountValue;
+    return risk / (entryPrice - stopLossPrice);
 }
 
-function calculateTakeProfitPercent(entryPrice, takeProfitPrice, units, accountValue) {
+function calculateTakeProfitPercent(entryPrice, takeProfitPrice) {
     return (takeProfitPrice / entryPrice - 1) * 100;
 }
 
@@ -54,9 +31,127 @@ function calculateRiskCurrency(entryPrice, stopLossPrice, units) {
     return (entryPrice - stopLossPrice) * units;
 }
 
+function calculateRiskCurrencyAlt(accountValue, riskAccountPercent) {
+    return accountValue * (riskAccountPercent / 100);
+}
+
 function calculateAccountPercentRisk(riskCurrency, accountValue) {
     return (riskCurrency / accountValue) * 100;
 }
+
+function updateAllFields(response, fieldToSkip) {
+    updateFieldAccountValue(response);
+    updateFieldUnits(response);
+    updateFieldEntryPrice(response);
+    updateFieldStopLossPrice(response);
+    updateFieldStopLossPercent(response);
+    updateFieldTakeProfitPrice(response);
+    updateFieldTakeProfitPercent(response);
+    updateFieldRiskPercent(response);
+    updateFieldRiskCurrency(response);
+}
+
+function updateFieldAccountValue(response) {
+    // Recalculate based on new account value
+    if (response.entryPrice && response.units) {
+        if (response.stopLossPrice) {
+            response.riskCurrency = calculateRiskCurrency(response.entryPrice, response.stopLossPrice, response.units);
+
+            if (response.accountValue) {
+                response.riskPercent = calculateAccountPercentRisk(response.riskCurrency, response.accountValue)
+            }
+        }
+    }
+}
+
+function updateFieldUnits(response) {
+    if (response.units && response.entryPrice && response.stopLossPrice) {
+        response.riskCurrency = calculateRiskCurrency(response.entryPrice, response.stopLossPrice, response.units);
+        
+        if (response.accountValue) {
+            response.riskPercent = calculateAccountPercentRisk(response.riskCurrency, response.accountValue)
+        }
+    }
+}
+
+function updateFieldEntryPrice(response) {
+    if (response.entryPrice)
+    {
+        if (response.stopLossPercent) {
+            response.stopLossPrice = calculateStopLossPrice(response.entryPrice, response.stopLossPercent);
+            response.stopLossPercent = calculateStopLossPercent(response.entryPrice, response.stopLossPrice);
+        }
+
+        if (response.takeProfitPercent) {
+            response.takeProfitPrice = calculateTakeProfitPrice(response.entryPrice, response.takeProfitPercent);
+            response.takeProfitPercent = calculateTakeProfitPercent(response.entryPrice, response.takeProfitPrice);
+        }
+    }
+}
+
+function updateFieldStopLossPrice(response) {
+    if (response.entryPrice && response.stopLossPrice) {
+        response.stopLossPercent = calculateStopLossPercent(response.entryPrice, response.stopLossPrice);
+    }
+    else if (response.units && response.riskPercent && response.accountValue) {
+        response.stopLossPercent = calculateStopLossPercentByRisk(response.units, response.riskPercent, response.accountValue);
+    }
+}
+
+function updateFieldStopLossPercent(response) {
+    if (response.stopLossPercent && response.entryPrice) {
+        response.stopLossPrice = calculateStopLossPrice(response.entryPrice, response.stopLossPercent);
+    }
+}
+
+function updateFieldTakeProfitPrice(response) {
+    if (response.takeProfitPrice && response.entryPrice) {
+        response.takeProfitPercent = calculateTakeProfitPercent(response.entryPrice, response.takeProfitPrice);
+    }
+}
+
+function updateFieldTakeProfitPercent(response) {
+    if (response.entryPrice && response.takeProfitPercent) {
+        response.takeProfitPrice = calculateTakeProfitPrice(response.entryPrice, response.takeProfitPercent);
+    }
+}
+
+function updateFieldRiskCurrency(response) {
+    if (response.riskCurrency && response.accountValue) {
+        response.riskPercent = calculateAccountPercentRisk(response.riskCurrency, response.accountValue);
+        response.units = calculateUnits(response.entryPrice, response.stopLossPrice, response.accountValue, response.riskPercent);
+    }
+}
+
+function updateFieldRiskPercent(response) {
+    if (response.accountValue && response.riskPercent) {
+        response.riskCurrency = calculateRiskCurrencyAlt(response.accountValue, response.riskPercent);
+    }
+    else if (response.units && response.entryPrice && response.stopLossPrice) {
+        response.riskCurrency = calculateRiskCurrency(response.entryPrice, response.stopLossPrice, response.units);
+    }
+}
+
+const validateNumberField = (value, fieldName, minValue = 0, maxValue = Infinity) => {
+    if (value !== undefined && (typeof value !== 'number' || value <= minValue || value > maxValue)) {
+        throw new Error(`Invalid ${fieldName}. Must be a positive number between ${minValue} and ${maxValue}.`);
+    }
+}
+
+const app = express();
+
+app.use(bodyParser.json());
+
+const PORT = process.env.PORT || 5000;
+
+// Serve static files from the React app
+app.use(express.static(path.join(__dirname, 'client/build')));
+
+// The "catchall" handler: for any request that doesn't
+// match one above, send back React's index.html file.
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'client/build', 'index.html'));
+});
 
 app.post('/calculate', (req, res) => {
     let {
@@ -73,162 +168,97 @@ app.post('/calculate', (req, res) => {
     } = req.body;
 
     // Validate input fields
-    
-    if (typeof accountValue !== 'number' || accountValue <= 0) {
-        return res.status(400).json({ error: 'Invalid account value. Must be a positive number.' });
+    try {
+        validateNumberField(accountValue, 'account value', 0);
+        validateNumberField(units, 'units', 0);
+        validateNumberField(riskCurrency, 'risk currency', 0);
+        validateNumberField(riskPercent, 'risk percent', 0, 100);
+        validateNumberField(entryPrice, 'entry price', 0);
+        validateNumberField(stopLossPrice, 'stop loss price', 0);
+        validateNumberField(stopLossPercent, 'stop loss percent', 0, 100);
+        validateNumberField(takeProfitPrice, 'take profit price', 0);
+        validateNumberField(takeProfitPercent, 'take profit percent', 0, 100);
+    } catch (error) {
+        return res.status(400).json({ error: error.message });
     }
 
-    if (units && typeof units !== 'number' || units <= 0) {
-        return res.status(400).json({ error: 'Invalid units. Must be a positive number.' });
+    if (stopLossPrice && entryPrice && stopLossPrice >= entryPrice) {
+        return res.status(400).json({ error: 'Invalid stop loss. Stop loss must be less than entry price.'});
     }
 
-    if (riskCurrency && typeof riskCurrency !== 'number' || riskCurrency <= 0) {
-        return res.status(400).json({ error: 'Invalid riskCurrency. Must be a positive number.' });
+    if (takeProfitPrice && entryPrice && takeProfitPrice <= entryPrice) {
+        return res.status(400).json({ error: 'Invalid take profit price. Take profit price must be greater than entry price.'});
     }
-    
-    if (riskPercent && typeof riskPercent !== 'number' || riskPercent <= 0 || riskPercent > 100) {
-        return res.status(400).json({ error: 'Invalid units. Must be a positive number up to 100.' });
-    }
-
-    if (entryPrice && typeof entryPrice !== 'number' || entryPrice <= 0) {
-        return res.status(400).json({ error: 'Invalid entry price. Must be a positive number.' });
-    }
-
-    if (stopLossPrice && typeof stopLossPrice !== 'number') {
-        return res.status(400).json({ error: 'Invalid stop loss price. Must be a number.' });
-    }
-
-    if (stopLossPercent && typeof stopLossPercent !== 'number' || stopLossPercent < 0 || stopLossPercent > 100) {
-        return res.status(400).json({ error: 'Invalid stop loss percent. Must be between 0 and 100.' });
-    }
-
-    if (takeProfitPrice && typeof takeProfitPrice !== 'number' || takeProfitPrice <= 0) {
-        return res.status(400).json({ error: 'Invalid take profit price. Must be a positive number.' });
-    }
-
-    if (takeProfitPercent && typeof takeProfitPercent !== 'number' || takeProfitPercent <= 0) {
-        return res.status(400).json({ error: 'Invalid take profit percent. Must be a positive number.' });
-    }
-
-    const validFields = [
-        'accountValue',
-        'units',
-        'riskCurrency',
-        'riskPercent',
-        'entryPrice',
-        'stopLossPrice',
-        'stopLossPercent',
-        'takeProfitPrice',
-        'takeProfitPercent',
-    ];
 
     let response = {};
+
+    response.accountValue = accountValue;
+    response.units = units;
+    response.riskCurrency = riskCurrency;
+    response.riskPercent = riskPercent;
+    response.entryPrice = entryPrice;
+    response.stopLossPrice = stopLossPrice;
+    response.stopLossPercent = stopLossPercent;
+    response.takeProfitPrice = takeProfitPrice;
+    response.takeProfitPercent = takeProfitPercent;
     
-    // Calculate stopLossPrice
-    if (entryPrice && stopLossPercent && !stopLossPrice) {
-        stopLossPrice = calculateStopLossPrice(entryPrice, stopLossPercent);
-        response.stopLossPrice = stopLossPrice;
-    }
-
-    // Calculate stopLossPercent
-    if (entryPrice && stopLossPrice && !stopLossPercent) {
-        stopLossPercent = calculateStopLossPercent(entryPrice, stopLossPrice);
-        response.stopLossPercent = stopLossPercent;
-    }
-    
-    // Calculate risk currency
-    if (units && entryPrice && stopLossPercent && !riskCurrency) {
-        riskCurrency = calculateRiskCurrency(entryPrice, stopLossPrice, units);
-        response.riskCurrency = riskCurrency;
-    }
-
-    // Calculate risk percent
-    if (riskCurrency && !riskPercent) {
-        riskPercent = calculateAccountPercentRisk(riskCurrency, accountValue);
-        response.riskPercent = riskPercent;
-    }
-
-    // Calculate takeProfitPrice
-    if (entryPrice && takeProfitPercent && !takeProfitPrice) {
-        takeProfitPrice = calculateTakeProfitPrice(entryPrice, takeProfitPercent);
-        response.takeProfitPrice = takeProfitPrice;
-    }
-
-    // Calculate units based on stopLoss
-    if (entryPrice && stopLossPrice && stopLossPercent && !units) {
-        const loss = (stopLossPercent / 100) * accountValue;
-        response.units = loss / (entryPrice - stopLossPrice);
-    }
-
     switch (fieldToUpdate) {
         case 'accountValue':
-            // Recalculate based on new account value
-            if (entryPrice && stopLossPrice) {
-                response.riskCurrency = calculateRiskCurrency(entryPrice, stopLossPrice, units);
-                response.riskPercent = calculateAccountPercentRisk(response.riskCurrency, accountValue)
-            }
-            if (entryPrice && takeProfitPrice) {
-                response.riskCurrency = calculateRiskCurrency(entryPrice, stopLossPrice, units);
-                response.riskPercent = calculateAccountPercentRisk(response.riskCurrency, accountValue);
-            }
+            updateFieldAccountValue(response);
             break;
 
         case 'units':
-            if (entryPrice && stopLossPrice) {
-                response.riskCurrency = calculateRiskCurrency(entryPrice, stopLossPrice, units);
-                response.riskPercent = calculateAccountPercentRisk(response.riskCurrency, accountValue)
-            }
-            if (entryPrice && takeProfitPrice) {
-                response.takeProfitPercent = calculateTakeProfitPercent(entryPrice, takeProfitPrice, units, accountValue);
-            }
+            updateFieldUnits(response);
             break;
 
         case 'entryPrice':
-            if (stopLossPrice && stopLossPercent) {
-                response.units = calculateUnitsForStopLoss(entryPrice, stopLossPrice, stopLossPercent, accountValue);
-            }
-            if (units && takeProfitPrice) {
-                response.takeProfitPercent = calculateTakeProfitPercent(entryPrice, takeProfitPrice, units, accountValue);
-            }
+            updateFieldEntryPrice(response);
             break;
 
         case 'stopLossPrice':
-            if (entryPrice && stopLossPercent) {
-                response.units = calculateUnitsForStopLoss(entryPrice, stopLossPrice, stopLossPercent, accountValue);
-                response.riskCurrency = calculateRiskCurrency(entryPrice, stopLossPrice, response.units);
-                response.riskPercent = calculateAccountPercentRisk(response.riskCurrency, accountValue);
-            }
+            updateFieldStopLossPrice(response);
             break;
 
         case 'stopLossPercent':
-            if (entryPrice && stopLossPrice) {
-                response.units = calculateUnitsForStopLoss(entryPrice, stopLossPrice, stopLossPercent, accountValue);
-                response.riskCurrency = calculateRiskCurrency(entryPrice, stopLossPrice, response.units);
-                response.riskPercent = calculateAccountPercentRisk(response.riskCurrency, accountValue);
-            }
+            updateFieldStopLossPercent(response);
             break;
 
         case 'takeProfitPrice':
-            if (units && entryPrice) {
-                response.takeProfitPercent = calculateTakeProfitPercent(entryPrice, takeProfitPrice, units, accountValue);
-            }
+            updateFieldTakeProfitPrice(response);
             break;
 
         case 'takeProfitPercent':
-            if (entryPrice && units) {
-                response.takeProfitPrice = calculateTakeProfitPrice(entryPrice, takeProfitPercent, accountValue, units);
-            }
+            updateFieldTakeProfitPercent(response);
             break;
+
         case 'riskCurrency':
-            if (entryPrice && units) {
-                response.riskPercent = calculateAccountPercentRisk(riskCurrency, accountValue);
-            }
+            updateFieldRiskCurrency(response);
+            break;
+        
+        case 'riskPercent':
+            updateFieldRiskPercent(response);
+            break;
         default:
             return res.status(400).json({ error: 'Invalid field name' });
     }
 
+    updateAllFields(response, fieldToUpdate);
+
     res.json(response);
 });
 
+app.use((err, req, res, next) => {
+    console.error(err.stack);
+    res.status(500).send('Something broke!');
+});
 
-module.exports = app;
+const server = app.listen(PORT, () => {
+	if (process.env.NODE_ENV !== 'test') {
+    		console.log(`Server is running on port ${PORT}`);
+	}
+});
+
+module.exports = {
+    app,
+    server
+};

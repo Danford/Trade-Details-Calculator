@@ -1,247 +1,169 @@
 const request = require('supertest');
-const app = require('../server');  // Ensure this path points to your Express app setup.
+const { app, server } = require('../server');  // Ensure this path points to your Express app setup.
+
+afterAll(() => {
+    server.close();  // Close the server after tests
+});
 
 describe('POST /calculate', () => {
-    it('should calculate takeProfitPrice when provided entryPrice, takeProfitPercent, accountValue, and units', async () => {
+    it('should return 400 when accountValue is not a positive number', async () => {
         const response = await request(app)
             .post('/calculate')
             .send({
-                accountValue: 1000,
-                units: 10,
-                entryPrice: 100,
-                takeProfitPercent: 10,
-                fieldToUpdate: 'takeProfitPercent'
-            });
-
-        expect(response.statusCode).toBe(200);
-        expect(response.body.takeProfitPrice).toBeCloseTo(110);
-    });
-    
-    it('should calculate both takeProfitPrice and stopLossPrice when provided necessary inputs', async () => {
-        const response = await request(app)
-            .post('/calculate')
-            .send({
-                accountValue: 1000,
-                units: 10,
-                entryPrice: 100,
-                takeProfitPercent: 10,
-                stopLossPercent: 5,
-                fieldToUpdate: 'stopLossPercent'
-            });
-    
-        expect(response.statusCode).toBe(200);
-        expect(response.body.takeProfitPrice).toBeCloseTo(110);
-        expect(response.body.stopLossPrice).toBeCloseTo(95);
-    });
-    
-    it('should calculate stopLossPrice when provided entryPrice, stopLossPercent, accountValue, and units', async () => {
-        const response = await request(app)
-            .post('/calculate')
-            .send({
-                accountValue: 1000,
-                units: 10,
-                entryPrice: 100,
-                stopLossPercent: 5,
-                fieldToUpdate: 'stopLossPercent'
-            });
-    
-        if (response.statusCode !== 200) {
-            console.error('Error:', response.error);
-        }
-
-        expect(response.statusCode).toBe(200);
-        expect(response.body.stopLossPrice).toBeCloseTo(95);
-    });
-    
-    it('should calculate units for stopLoss when provided entryPrice, stopLossPrice, stopLossPercent, and accountValue', async () => {
-        const response = await request(app)
-            .post('/calculate')
-            .send({
-                accountValue: 1000,
-                entryPrice: 100,
-                stopLossPrice: 95,
-                stopLossPercent: 5,
-                fieldToUpdate: 'stopLossPercent'
-            });
-    
-        if (response.statusCode !== 200) {
-            console.error('Error:', response.error);
-        }
-
-        expect(response.statusCode).toBe(200);
-        expect(response.body.units).toBeCloseTo(10);
-    });
-    
-
-    it('should return 400 when accountValue is not a number', async () => {
-        const response = await request(app)
-            .post('/calculate')
-            .send({
-                accountValue: "invalid",
-                units: 10,
-                entryPrice: 100,
-                takeProfitPercent: 10
+                accountValue: "invalid"
             });
 
         expect(response.statusCode).toBe(400);
+        expect(response.body.error).toBe('Invalid account value. Must be a positive number between 0 and Infinity.');
     });
 
-    it('should return 400 when entryPrice is not positive', async () => {
+    it('should return 400 when units is not a positive number', async () => {
         const response = await request(app)
             .post('/calculate')
             .send({
-                accountValue: 1000,
-                units: 10,
-                entryPrice: -100,
-                takeProfitPercent: 10
+                units: 0
             });
 
         expect(response.statusCode).toBe(400);
+        expect(response.body.error).toBe('Invalid units. Must be a positive number between 0 and Infinity.');
+    });
+
+    it('should return 400 when risk currency is not a positive number', async () => {
+        const response = await request(app)
+            .post('/calculate')
+            .send({
+                riskCurrency: 0
+            });
+
+        expect(response.statusCode).toBe(400);
+        expect(response.body.error).toBe('Invalid risk currency. Must be a positive number between 0 and Infinity.');
+    });
+    
+    it('should return 400 when risk percent is greater than 100', async () => {
+        const response = await request(app)
+            .post('/calculate')
+            .send({
+                riskPercent: 101
+            });
+
+        expect(response.statusCode).toBe(400);
+        expect(response.body.error).toBe('Invalid risk percent. Must be a positive number between 0 and 100.');
+    });
+
+    it('should return 400 when risk percent is not a positive number', async () => {
+        const response = await request(app)
+            .post('/calculate')
+            .send({
+                riskPercent: 0
+            });
+
+        expect(response.statusCode).toBe(400);
+        expect(response.body.error).toBe('Invalid risk percent. Must be a positive number between 0 and 100.');
+    });
+
+    it('should return 400 when entryPrice is not a positive number', async () => {
+        const response = await request(app)
+            .post('/calculate')
+            .send({
+                entryPrice: 0
+            });
+
+        expect(response.statusCode).toBe(400);
+        expect(response.body.error).toBe('Invalid entry price. Must be a positive number between 0 and Infinity.');
     });
 
     it('should return 400 when stopLossPercent is greater than 100', async () => {
         const response = await request(app)
             .post('/calculate')
             .send({
-                accountValue: 1000,
-                units: 10,
-                entryPrice: 100,
-                stopLossPercent: 150
+                stopLossPercent: 101
             });
     
         expect(response.statusCode).toBe(400);
-        expect(response.body.error).toBe('Invalid stop loss percent. Must be between 0 and 100.');
+        expect(response.body.error).toBe('Invalid stop loss percent. Must be a positive number between 0 and 100.');
     });
-    
-    it('should return 400 when takeProfitPercent is less than or equal to 0', async () => {
+
+    it('should return 400 when stopLossPercent is not a positive number', async () => {
         const response = await request(app)
             .post('/calculate')
             .send({
-                accountValue: 1000,
-                units: 10,
-                entryPrice: 100,
+                stopLossPercent: 0
+            });
+    
+        expect(response.statusCode).toBe(400);
+        expect(response.body.error).toBe('Invalid stop loss percent. Must be a positive number between 0 and 100.');
+    });
+
+    it('should return 400 when stopLossPrice is less than or equal to 0', async () => {
+        const response = await request(app)
+            .post('/calculate')
+            .send({
+                stopLossPrice: 0
+            });
+    
+        expect(response.statusCode).toBe(400);
+        expect(response.body.error).toBe('Invalid stop loss price. Must be a positive number between 0 and Infinity.');
+    });
+    
+    it('should return 400 when takeProfitPercent is greater than 100', async () => {
+        const response = await request(app)
+            .post('/calculate')
+            .send({
+                takeProfitPercent: 101
+            });
+    
+        expect(response.statusCode).toBe(400);
+        expect(response.body.error).toBe('Invalid take profit percent. Must be a positive number between 0 and 100.');
+    });
+
+    it('should return 400 when takeProfitPercent is not a positive number', async () => {
+        const response = await request(app)
+            .post('/calculate')
+            .send({
                 takeProfitPercent: 0
             });
     
         expect(response.statusCode).toBe(400);
-        expect(response.body.error).toBe('Invalid take profit percent. Must be a positive number.');
+        expect(response.body.error).toBe('Invalid take profit percent. Must be a positive number between 0 and 100.');
     });
 
-    it('should recalculate values when fieldToUpdate is set to accountValue', async () => {
+    it('should return 400 when takeProfitPrice is not a positive number', async () => {
         const response = await request(app)
             .post('/calculate')
             .send({
-                accountValue: 2000,  // Updating accountValue
-                units: 10,
-                entryPrice: 100,
-                takeProfitPercent: 10,
-                fieldToUpdate: 'accountValue'
-            });
-    
-        if (response.statusCode !== 200) {
-            console.error('Error:', response.error);
-        }
-
-        expect(response.statusCode).toBe(200);
-        expect(response.body.takeProfitPrice).toBeCloseTo(110);
-    });
-
-    it('should recalculate values when fieldToUpdate is set to units', async () => {
-        const response = await request(app)
-            .post('/calculate')
-            .send({
-                accountValue: 1000,
-                units: 20,  // Updating units
-                entryPrice: 100,
-                stopLossPrice: 90,
-                takeProfitPrice: 110,
-                fieldToUpdate: 'units'
-            });
-    
-        if (response.statusCode !== 200) {
-            console.error('Error:', response.error);
-        }
-
-        expect(response.statusCode).toBe(200);
-        expect(response.body.stopLossPercent).toBeCloseTo(10);
-        expect(response.body.takeProfitPercent).toBeCloseTo(10);
-    });
-
-    it('should recalculate values when fieldToUpdate is set to entryPrice', async () => {
-        const response = await request(app)
-            .post('/calculate')
-            .send({
-                accountValue: 1000,
-                units: 10,
-                entryPrice: 100,  // Updating entryPrice
-                stopLossPrice: 95,
-                takeProfitPrice: 110,
-                fieldToUpdate: 'entryPrice'
-            });
-
-        if (response.statusCode !== 200) {
-            console.error('Error:', response.error);
-        }
-
-        expect(response.statusCode).toBe(200);
-        expect(response.body.takeProfitPercent).toBeCloseTo(10);
-        expect(response.body.units).toBeCloseTo(10);
-    });
-
-    it('should recalculate values when fieldToUpdate is set to stopLossPrice', async () => {
-        const response = await request(app)
-            .post('/calculate')
-            .send({
-                accountValue: 1000,
-                units: 10,
-                entryPrice: 100,
-                stopLossPrice: 89,  // Updating stopLossPrice
-                stopLossPercent: 11,
-                fieldToUpdate: 'stopLossPrice'
-            });
-    
-        if (response.statusCode !== 200) {
-            console.error('Error:', response.error);
-        }
-
-        expect(response.statusCode).toBe(200);
-        expect(response.body.units).toBeCloseTo(10);
-    });
-
-    it('should recalculate values when fieldToUpdate is set to takeProfitPrice', async () => {
-        const response = await request(app)
-            .post('/calculate')
-            .send({
-                accountValue: 1000,
-                units: 10,
-                entryPrice: 100,
-                takeProfitPrice: 120,  // Updating takeProfitPrice
-                fieldToUpdate: 'takeProfitPrice'
-            });
-    
-        if (response.statusCode !== 200) {
-            console.error('Error:', response.error);
-        }
-
-        expect(response.statusCode).toBe(200);
-        expect(response.body.takeProfitPercent).toBeCloseTo(20); // (20/100)*100
-    });
-
-    it('should return an error when fieldToUpdate is set to an unexpected value', async () => {
-        const response = await request(app)
-            .post('/calculate')
-            .send({
-                accountValue: 1000,
-                units: 10,
-                entryPrice: 100,
-                takeProfitPercent: 10,
-                fieldToUpdate: 'unexpectedField'
+                takeProfitPrice: 0
             });
     
         expect(response.statusCode).toBe(400);
-        expect(response.body.error).toBe('Invalid field name');
+        expect(response.body.error).toBe('Invalid take profit price. Must be a positive number between 0 and Infinity.');
     });
+
+    it('should return 400 when stopLossPrice is equal to or greater than entryPrice', async () => {
+        const response = await request(app)
+            .post('/calculate')
+            .send({
+                entryPrice: 100,
+                stopLossPrice: 100,  // Updating stopLossPrice
+                fieldToUpdate: 'stopLossPrice'
+            });
     
+        expect(response.statusCode).toBe(400);
+        expect(response.body.error).toBe('Invalid stop loss. Stop loss must be less than entry price.');
+    });
+
+    it('should return 400 when takeProfitPrice is equal to or less than entryPrice', async () => {
+        const response = await request(app)
+            .post('/calculate')
+            .send({
+                entryPrice: 100,
+                takeProfitPrice: 100,  // Updating stopLossPrice
+                fieldToUpdate: 'takeProfitPrice'
+            });
+    
+        expect(response.statusCode).toBe(400);
+        expect(response.body.error).toBe('Invalid take profit price. Take profit price must be greater than entry price.');
+    });
+
     it('should return 400 when fieldToUpdate is invalid', async () => {
         const response = await request(app)
             .post('/calculate')
@@ -257,101 +179,286 @@ describe('POST /calculate', () => {
         expect(response.body.error).toBe('Invalid field name');
     });
     
-    it('should handle invalid input types', async () => {
+    it('should calculate values when fieldToUpdate is set to accountValue', async () => {
         const response = await request(app)
             .post('/calculate')
             .send({
-                accountValue: "1000",  // string instead of number
+                accountValue: 2000,  // Updating accountValue
                 units: 10,
                 entryPrice: 100,
-                takeProfitPercent: 10,
-                fieldToUpdate: 'takeProfitPrice'
+                stopLossPercent: 10,
+                fieldToUpdate: 'accountValue'
             });
     
-        expect(response.statusCode).toBe(400);
-        expect(response.body.error).toBe('Invalid account value. Must be a positive number.');
+        expect(response.statusCode).toBe(200);
+        expect(response.body.accountValue).toBeCloseTo(2000);
+        expect(response.body.units).toBeCloseTo(10);
+        expect(response.body.riskCurrency).toBeCloseTo(100);
+        expect(response.body.riskPercent).toBeCloseTo(5);
+        expect(response.body.entryPrice).toBeCloseTo(100);
+        expect(response.body.stopLossPrice).toBeCloseTo(90);
+        expect(response.body.stopLossPercent).toBeCloseTo(10);
+        expect(response.body.takeProfitPrice).toBeUndefined();
+        expect(response.body.takeProfitPercent).toBeUndefined();
     });
 
-    it('should handle extremely large values without overflow', async () => {
+    it('should calculate values when fieldToUpdate is set to units', async () => {
         const response = await request(app)
             .post('/calculate')
             .send({
-                accountValue: Number.MAX_SAFE_INTEGER,  // maximum representable value in JS
-                units: Number.MAX_SAFE_INTEGER,
-                entryPrice: Number.MAX_SAFE_INTEGER,
+                accountValue: 1000,
+                units: 40,  // Updating units
+                entryPrice: 50,
+                stopLossPrice: 45,
                 takeProfitPercent: 10,
-                fieldToUpdate: 'takeProfitPrice'
+                fieldToUpdate: 'units'
+            });
+    
+        expect(response.statusCode).toBe(200);
+        expect(response.body.accountValue).toBeCloseTo(1000);
+        expect(response.body.units).toBeCloseTo(40);
+        expect(response.body.riskCurrency).toBeCloseTo(200);
+        expect(response.body.riskPercent).toBeCloseTo(20);
+        expect(response.body.entryPrice).toBeCloseTo(50);
+        expect(response.body.stopLossPrice).toBeCloseTo(45);
+        expect(response.body.stopLossPercent).toBeCloseTo(10);
+        expect(response.body.takeProfitPrice).toBeCloseTo(55);
+        expect(response.body.takeProfitPercent).toBeCloseTo(10);
+    });
+
+    it('should calculate values with fieldToUpdate set to riskCurrency', async () => {
+        const response = await request(app)
+            .post('/calculate')
+            .send({
+                accountValue: 1000,
+                entryPrice: 100,
+                stopLossPrice: 50,
+                riskCurrency: 1000,  // Updating riskCurrency
+                fieldToUpdate: 'riskCurrency'
+            });
+    
+        expect(response.statusCode).toBe(200);
+        expect(response.body.accountValue).toBeCloseTo(1000);
+        expect(response.body.units).toBeCloseTo(20);
+        expect(response.body.riskCurrency).toBeCloseTo(1000);
+        expect(response.body.riskPercent).toBeCloseTo(100);
+        expect(response.body.entryPrice).toBeCloseTo(100);
+        expect(response.body.stopLossPrice).toBeCloseTo(50);
+        expect(response.body.stopLossPercent).toBeCloseTo(50);
+        expect(response.body.takeProfitPrice).toBeUndefined();
+        expect(response.body.takeProfitPercent).toBeUndefined();
+    });
+
+    it('should calculate values with fieldToUpdate set to riskPercent', async () => {
+        const response = await request(app)
+            .post('/calculate')
+            .send({
+                accountValue: 1000,
+                entryPrice: 100,
+                stopLossPrice: 90,
+                stopLossPercent: 10,
+                riskPercent: 10,  // Updating riskPercent
+                fieldToUpdate: 'riskPercent'
+            });
+    
+        expect(response.statusCode).toBe(200);
+        expect(response.body.accountValue).toBeCloseTo(1000);
+        expect(response.body.units).toBeCloseTo(10);
+        expect(response.body.riskCurrency).toBeCloseTo(100);
+        expect(response.body.riskPercent).toBeCloseTo(10);
+        expect(response.body.entryPrice).toBeCloseTo(100);
+        expect(response.body.stopLossPrice).toBeCloseTo(90);
+        expect(response.body.stopLossPercent).toBeCloseTo(10);
+        expect(response.body.takeProfitPrice).toBeUndefined();
+        expect(response.body.takeProfitPercent).toBeUndefined();
+        expect(response.body.units).toBeCloseTo(10);
+    });
+    it('should calculate values with fieldToUpdate set to takeProfitPercent', async () => {
+        const response = await request(app)
+            .post('/calculate')
+            .send({
+                entryPrice: 100,
+                takeProfitPercent: 10,  // Updating takeProfitPercent
+                fieldToUpdate: 'takeProfitPercent'
+            });
+
+        expect(response.statusCode).toBe(200);
+        expect(response.body.accountValue).toBeUndefined();
+        expect(response.body.units).toBeUndefined();
+        expect(response.body.riskCurrency).toBeUndefined();
+        expect(response.body.riskPercent).toBeUndefined();
+        expect(response.body.entryPrice).toBeCloseTo(100);
+        expect(response.body.stopLossPrice).toBeUndefined();
+        expect(response.body.stopLossPercent).toBeUndefined();
+        expect(response.body.takeProfitPrice).toBeCloseTo(110);
+        expect(response.body.takeProfitPercent).toBeCloseTo(10);
+    });
+    
+    it('should calculate values with fieldToUpdate set to stopLossPercent', async () => {
+        const response = await request(app)
+            .post('/calculate')
+            .send({
+                entryPrice: 100,
+                stopLossPercent: 5,  // Updating stopLossPercent
+                fieldToUpdate: 'stopLossPercent'
             });
     
         if (response.statusCode !== 200) {
             console.error('Error:', response.error);
         }
 
-        expect(response.statusCode).toBe(200);  
+        expect(response.statusCode).toBe(200);
+        expect(response.body.accountValue).toBeUndefined();
+        expect(response.body.units).toBeUndefined();
+        expect(response.body.riskCurrency).toBeUndefined();
+        expect(response.body.riskPercent).toBeUndefined();
+        expect(response.body.entryPrice).toBeCloseTo(100);
+        expect(response.body.stopLossPrice).toBeCloseTo(95);
+        expect(response.body.stopLossPercent).toBeCloseTo(5);
+        expect(response.body.takeProfitPrice).toBeUndefined();
     });
-
-    it('should handle missing necessary fields', async () => {
-        const response = await request(app)
-            .post('/calculate')
-            .send({
-                units: 10,   // Missing accountValue, entryPrice, and other fields
-                fieldToUpdate: 'takeProfitPrice'
-            });
     
-        expect(response.statusCode).toBe(400);
-        expect(response.body.error).toBeTruthy();  // Expecting an error message to be returned
-    });
-
-    it('should handle zero values', async () => {
+    it('should calculate values with fieldToUpdate set to entryPrice', async () => {
         const response = await request(app)
             .post('/calculate')
             .send({
-                accountValue: 0,  // Zero value which may lead to calculations issues
+                accountValue: 1000,
+                units: 10,
+                entryPrice: 1000,  // Updating entryPrice
+                stopLossPrice: 900,
+                stopLossPercent: 10,
+                takeProfitPercent: 10,
+                fieldToUpdate: 'entryPrice'
+            });
+
+        expect(response.statusCode).toBe(200);
+        expect(response.body.accountValue).toBeCloseTo(1000);
+        expect(response.body.units).toBeCloseTo(10);
+        expect(response.body.riskCurrency).toBeCloseTo(1000);
+        expect(response.body.riskPercent).toBeCloseTo(100);
+        expect(response.body.entryPrice).toBeCloseTo(1000);
+        expect(response.body.stopLossPercent).toBeCloseTo(10);
+        expect(response.body.stopLossPrice).toBeCloseTo(900);
+        expect(response.body.takeProfitPrice).toBeCloseTo(1100);
+        expect(response.body.takeProfitPercent).toBeCloseTo(10);
+    });
+
+    it('should calculate values with fieldToUpdate set to stopLossPrice', async () => {
+        const response = await request(app)
+            .post('/calculate')
+            .send({
+                accountValue: 1000,
                 units: 10,
                 entryPrice: 100,
-                takeProfitPercent: 10,
+                stopLossPrice: 89,  // Updating stopLossPrice
+                fieldToUpdate: 'stopLossPrice'
+            });
+    
+        expect(response.statusCode).toBe(200);
+        expect(response.body.accountValue).toBeCloseTo(1000);
+        expect(response.body.units).toBeCloseTo(10);
+        expect(response.body.riskCurrency).toBeCloseTo(110);
+        expect(response.body.riskPercent).toBeCloseTo(11);
+        expect(response.body.entryPrice).toBeCloseTo(100);
+        expect(response.body.stopLossPrice).toBeCloseTo(89);
+        expect(response.body.stopLossPercent).toBeCloseTo(10.9999999);
+        expect(response.body.takeProfitPrice).toBeUndefined();
+        expect(response.body.takeProfitPercent).toBeUndefined();
+        expect(response.body.units).toBeCloseTo(10);
+    });
+
+    it('should calculate values with fieldToUpdate set to stopLossPercent', async () => {
+        const response = await request(app)
+            .post('/calculate')
+            .send({
+                accountValue: 1000,
+                units: 10,
+                entryPrice: 100,
+                stopLossPrice: 90,  
+                stopLossPercent: 11,  // Updating stopLossPercent
+                fieldToUpdate: 'stopLossPercent'
+            });
+    
+        expect(response.statusCode).toBe(200);
+        expect(response.body.accountValue).toBeCloseTo(1000);
+        expect(response.body.units).toBeCloseTo(10);
+        expect(response.body.riskCurrency).toBeCloseTo(110);
+        expect(response.body.riskPercent).toBeCloseTo(11);
+        expect(response.body.entryPrice).toBeCloseTo(100);
+        expect(response.body.stopLossPrice).toBeCloseTo(89);
+        expect(response.body.stopLossPercent).toBeCloseTo(10.9999999);
+        expect(response.body.takeProfitPrice).toBeUndefined();
+        expect(response.body.takeProfitPercent).toBeUndefined();
+        expect(response.body.stopLossPrice).toBeCloseTo(89);
+    });
+
+    it('should calculate values with fieldToUpdate set to takeProfitPrice', async () => {
+        const response = await request(app)
+            .post('/calculate')
+            .send({
+                accountValue: 1000,
+                units: 10,
+                entryPrice: 100,
+                takeProfitPrice: 120,  // Updating takeProfitPrice
+                riskPercent: 5,
                 fieldToUpdate: 'takeProfitPrice'
             });
     
-        expect(response.statusCode).toBe(400);
-        expect(response.body.error).toBe('Invalid account value. Must be a positive number.');
+        expect(response.statusCode).toBe(200);
+        expect(response.body.accountValue).toBeCloseTo(1000);
+        expect(response.body.units).toBeCloseTo(10);
+        expect(response.body.riskCurrency).toBeCloseTo(50);
+        expect(response.body.riskPercent).toBeCloseTo(5);
+        expect(response.body.entryPrice).toBeCloseTo(100);
+        expect(response.body.stopLossPrice).toBeCloseTo(95);
+        expect(response.body.stopLossPercent).toBeCloseTo(5);
+        expect(response.body.takeProfitPrice).toBeCloseTo(120);
+        expect(response.body.takeProfitPercent).toBeCloseTo(20);
     });
 
-    // Test for calculateCurrencyRisk
-    it('should correctly calculate currency risk', async () => {
+    it('should calculate values with fieldToUpdate set to stopLossPrice', async () => {
         const response = await request(app)
         .post('/calculate')
         .send({
             accountValue: 1000,
             units: 10,
             entryPrice: 100,
-            stopLossPrice: 95,
+            stopLossPrice: 95,  // Updating stopLossPrice
             fieldToUpdate: 'stopLossPrice'
         });
 
         expect(response.statusCode).toBe(200);
+        expect(response.body.accountValue).toBeCloseTo(1000);
+        expect(response.body.units).toBeCloseTo(10);
         expect(response.body.riskCurrency).toBeCloseTo(50);
+        expect(response.body.riskPercent).toBeCloseTo(5);
+        expect(response.body.entryPrice).toBeCloseTo(100);
+        expect(response.body.stopLossPrice).toBeCloseTo(95);
         expect(response.body.stopLossPercent).toBeCloseTo(5);
+        expect(response.body.takeProfitPrice).toBeUndefined();
+        expect(response.body.takeProfitPercent).toBeUndefined();
     });
 
-    // Test for calculateAccountPercentRisk
-    it('should correctly calculate risk percentage of account', async () => {
+    it('should calculate values with fieldToUpdate set to units ', async () => {
         const response = await request(app)
         .post('/calculate')
         .send({
             accountValue: 1000,
-            units: 10,
-            currencyRisk: 50,
+            units: 10,  // Updating units
             entryPrice: 100,
             stopLossPrice: 95,
             fieldToUpdate: 'units'
         });
         
         expect(response.statusCode).toBe(200);
+        expect(response.body.accountValue).toBeCloseTo(1000);
+        expect(response.body.units).toBeCloseTo(10);
+        expect(response.body.riskCurrency).toBeCloseTo(50);
         expect(response.body.riskPercent).toBeCloseTo(5);
+        expect(response.body.entryPrice).toBeCloseTo(100);
+        expect(response.body.stopLossPrice).toBeCloseTo(95);
         expect(response.body.stopLossPercent).toBeCloseTo(5);
+        expect(response.body.takeProfitPrice).toBeUndefined();
+        expect(response.body.takeProfitPercent).toBeUndefined();
     });
-
-    // Still need more test cases
 });
-
