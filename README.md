@@ -8,10 +8,10 @@ The Trade Details Calculator aims to simplify the process of determining crucial
 - [x] **Project Setup:** Initialize the project structure using Express for server-side and create-react-app for the frontend.
 
 #### 2. Backend Development (Node.js and Express):
-- [ ] **API Endpoints:** 
-  - [ ] `/calculate`: To receive input data and return calculated results. This will handle logic like calculating stop loss, take profit, and other necessary calculations.
-- [ ] **Data Validation:** Implement input validation to ensure all incoming data is accurate and correct. 
-- [ ] **Calculation Logic:** Design algorithms to determine stop loss, take profit, and other required trade details based on input data.
+- [x] **API Endpoints:** 
+  - [x] `/calculate`: To receive input data and return calculated results. This will handle logic like calculating stop loss, take profit, and other necessary calculations.
+- [x] **Data Validation:** Implement input validation to ensure all incoming data is accurate and correct. 
+- [x] **Calculation Logic:** Design algorithms to determine stop loss, take profit, and other required trade details based on input data.
 
 #### 3. Frontend Development (React and Redux):
 - [ ] **UI Components:**
